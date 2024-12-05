@@ -1,0 +1,431 @@
+C51 COMPILER V9.00   MAIN                                                                  02/17/2022 00:42:19 PAGE 1   
+
+
+C51 COMPILER V9.00, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN main.OBJ
+COMPILER INVOKED BY: C:\Keil_C51\C51\BIN\C51.EXE main.c BROWSE DEBUG OBJECTEXTEND TABS(2)
+
+line level    source
+
+   1          
+   2          #include  <reg52.h>
+   3          
+   4          typedef unsigned char uchar;
+   5          typedef unsigned int uint;
+   6          
+   7          /*****定义控制位**********************/
+   8          sbit    EW_R=P2^2;
+   9          sbit    EW_Y=P2^3;
+  10          sbit    EW_G=P2^4;
+  11          
+  12          sbit    SN_R=P2^5;
+  13          sbit    SN_Y=P2^6;
+  14          sbit    SN_G=P2^7;
+  15          
+  16          sbit U1 = P2^0;     //数码管段选
+  17          sbit U2 = P2^1;     //数码管位选
+  18          
+  19          
+  20          sbit key_set = P3^2;
+  21          sbit key_dec = P3^1;
+  22          sbit key_inc = P3^0;
+  23          
+  24          static bit blink_flg;
+  25          
+  26          static uchar    Time_EW;//东西方向倒计时单元
+  27          static uchar    Time_SN;//南北方向倒计时单元
+  28          
+  29          const char SEG_CODE[14] = {0xC0, 0xF9, 0xA4, 0xB0, 0x99, 0x92, 0x82, 0xF8, 0x80, 0x90, 0xBF, 0xFF, 0x88, 0
+             -x83};
+  30          
+  31          static uchar ns_red_time = 45;
+  32          static uchar ew_green_time = 42;
+  33          
+  34          static uchar ew_red_time = 45;
+  35          static uchar ns_green_time = 42;
+  36          
+  37          static uchar change_flag = 0;
+  38          
+  39          static uchar time_cnt = 0;
+  40          static uchar display_buf[4] = {0};
+  41          
+  42          // 红灯时间 = 绿灯时间 + 黄灯时间；
+  43          // 一次循环时间 = 东西红灯时间 + 南北红灯时间；
+  44          
+  45          
+  46          /**********************延时子程序************************/
+  47          void  Delay(uint   a)
+  48          {
+  49   1        uint  i;
+  50   1        i=a;
+  51   1        while(i--){;}
+  52   1      }
+  53          /*****************显示子函数**************************/
+  54          static void smg_display(void)
+C51 COMPILER V9.00   MAIN                                                                  02/17/2022 00:42:19 PAGE 2   
+
+  55          {
+  56   1        static uchar pos = 0;
+  57   1        U2=1;
+  58   1        P0=0x00;
+  59   1        U2=0;
+  60   1          
+  61   1        if(pos == 0)
+  62   1        {
+  63   2          P0 = SEG_CODE[Time_EW/10];
+  64   2          U1=1;
+  65   2          U1=0;
+  66   2          
+  67   2          if(change_flag == 1)
+  68   2          {
+  69   3            if(blink_flg)
+  70   3            {
+  71   4              P0 = 0xff;
+  72   4              U1=1;
+  73   4              U1=0;
+  74   4            }
+  75   3          }
+  76   2          
+  77   2          U2=1;
+  78   2          P0=0x02;
+  79   2          U2=0;
+  80   2        }
+  81   1        else if(pos == 1)
+  82   1        {
+  83   2          P0 = SEG_CODE[Time_EW%10];
+  84   2          U1=1;
+  85   2          U1=0;
+  86   2      
+  87   2          if(change_flag == 1)
+  88   2          {
+  89   3            if(blink_flg)
+  90   3            {
+  91   4              P0 = 0xff;
+  92   4              U1=1;
+  93   4              U1=0;
+  94   4            }
+  95   3          }
+  96   2          
+  97   2          U2=1;
+  98   2          P0=0x01;
+  99   2          U2=0;
+ 100   2        }
+ 101   1        else if(pos == 2)
+ 102   1        {
+ 103   2          P0 = SEG_CODE[Time_SN/10];
+ 104   2          U1=1;
+ 105   2          U1=0;
+ 106   2      
+ 107   2          if(change_flag == 2)
+ 108   2          {
+ 109   3            if(blink_flg)
+ 110   3            {
+ 111   4              P0 = 0xff;
+ 112   4              U1=1;
+ 113   4              U1=0;
+ 114   4            }
+ 115   3          }
+ 116   2          
+C51 COMPILER V9.00   MAIN                                                                  02/17/2022 00:42:19 PAGE 3   
+
+ 117   2          U2=1;
+ 118   2          P0=0x08;
+ 119   2          U2=0;
+ 120   2        }
+ 121   1        else if(pos == 3)
+ 122   1        {
+ 123   2          P0 = SEG_CODE[Time_SN%10];
+ 124   2          U1=1;
+ 125   2          U1=0;
+ 126   2      
+ 127   2          if(change_flag == 2)
+ 128   2          {
+ 129   3            if(blink_flg)
+ 130   3            {
+ 131   4              P0 = 0xff;
+ 132   4              U1=1;
+ 133   4              U1=0;
+ 134   4            }
+ 135   3          }
+ 136   2          
+ 137   2          U2=1;
+ 138   2          P0=0x04;
+ 139   2          U2=0;
+ 140   2        }
+ 141   1      
+ 142   1        pos++;
+ 143   1        if(pos == 4)
+ 144   1        {
+ 145   2          pos = 0;
+ 146   2        }
+ 147   1      }
+ 148          /*****************led子函数**************************/
+ 149          static void led1_handle(void)
+ 150          {
+ 151   1        EW_R = 0;
+ 152   1        EW_Y = 0;
+ 153   1        EW_G = 1;
+ 154   1      
+ 155   1        SN_R = 1;
+ 156   1        SN_Y = 0;
+ 157   1        SN_G = 0;
+ 158   1      }
+ 159          static void led2_handle(void)
+ 160          {
+ 161   1        EW_R = 0;
+ 162   1        EW_Y = 1;
+ 163   1        EW_G = 0;
+ 164   1      
+ 165   1        SN_R = 1;
+ 166   1        SN_Y = 0;
+ 167   1        SN_G = 0;
+ 168   1      }
+ 169          static void led3_handle(void)
+ 170          {
+ 171   1        EW_R = 1;
+ 172   1        EW_Y = 0;
+ 173   1        EW_G = 0;
+ 174   1      
+ 175   1        SN_R = 0;
+ 176   1        SN_Y = 0;
+ 177   1        SN_G = 1;
+ 178   1      }
+C51 COMPILER V9.00   MAIN                                                                  02/17/2022 00:42:19 PAGE 4   
+
+ 179          static void led4_handle(void)
+ 180          {
+ 181   1        EW_R = 1;
+ 182   1        EW_Y = 0;
+ 183   1        EW_G = 0;
+ 184   1      
+ 185   1        SN_R = 0;
+ 186   1        SN_Y = 1;
+ 187   1        SN_G = 0;
+ 188   1      }
+ 189          static void led5_handle(void)
+ 190          {
+ 191   1        EW_R = 0;
+ 192   1        EW_Y = 1;
+ 193   1        EW_G = 0;
+ 194   1      
+ 195   1        SN_R = 0;
+ 196   1        SN_Y = 1;
+ 197   1        SN_G = 0;
+ 198   1      }
+ 199          static void led6_handle(void)
+ 200          {
+ 201   1        EW_R = 0;
+ 202   1        EW_Y = 0;
+ 203   1        EW_G = 0;
+ 204   1      
+ 205   1        SN_R = 0;
+ 206   1        SN_Y = 0;
+ 207   1        SN_G = 0;
+ 208   1      }
+ 209          static void led7_handle(void)
+ 210          {
+ 211   1        EW_R = 1;
+ 212   1        EW_Y = 0;
+ 213   1        EW_G = 0;
+ 214   1      
+ 215   1        SN_R = 1;
+ 216   1        SN_Y = 0;
+ 217   1        SN_G = 0;
+ 218   1      }
+ 219          
+ 220          /**********************T0中断服务程序*******************/
+ 221          void timer0(void)interrupt 1 using 1
+ 222          {
+ 223   1        static uchar count;
+ 224   1        TH0=(65536-50000)/256;
+ 225   1        TL0=(65536-50000)%256;
+ 226   1      
+ 227   1        count++;
+ 228   1      
+ 229   1        if(count == 10)
+ 230   1        {
+ 231   2          blink_flg = 1;
+ 232   2          if(change_flag == 3)
+ 233   2          {
+ 234   3            led6_handle();
+ 235   3          }
+ 236   2        }
+ 237   1      
+ 238   1        if(count == 20)
+ 239   1        {
+ 240   2          blink_flg = 0;
+C51 COMPILER V9.00   MAIN                                                                  02/17/2022 00:42:19 PAGE 5   
+
+ 241   2          if(change_flag == 0)
+ 242   2          {
+ 243   3            if(time_cnt < ew_green_time)//东西绿灯亮，南北红灯亮 ,
+ 244   3            {
+ 245   4              Time_EW = ew_green_time - time_cnt; //  Time_EW = 25
+ 246   4              Time_SN = ns_red_time - time_cnt;   //  Time_SN = 45
+ 247   4              led1_handle();
+ 248   4            }
+ 249   3            else if(time_cnt <= ns_red_time)//东西黄灯亮，南北红灯亮
+ 250   3            {
+ 251   4              Time_EW = ns_red_time - time_cnt;
+ 252   4              Time_SN = ns_red_time - time_cnt;
+ 253   4              led2_handle();
+ 254   4            }
+ 255   3            else if(time_cnt <= (ns_red_time + ns_green_time))//东西红灯亮，南北绿灯亮
+ 256   3            {
+ 257   4              Time_EW = ns_red_time + ew_red_time - time_cnt + 1;
+ 258   4              Time_SN = ns_red_time + ns_green_time - time_cnt  + 1;
+ 259   4              led3_handle();
+ 260   4            }
+ 261   3            else if(time_cnt <= ns_red_time + ew_red_time + 1 )//东西红灯亮，南北黄灯亮
+ 262   3            {
+ 263   4              Time_EW = ns_red_time + ew_red_time - time_cnt + 1;
+ 264   4              Time_SN = ns_red_time + ew_red_time - time_cnt  + 1;
+ 265   4              led4_handle();
+ 266   4            }
+ 267   3            
+ 268   3            time_cnt++;
+ 269   3            if(time_cnt > (ns_red_time + ew_red_time  + 1))
+ 270   3            {
+ 271   4              time_cnt = 0;
+ 272   4            }
+ 273   3          }
+ 274   2          else if(change_flag == 3)
+ 275   2          {
+ 276   3            led5_handle();
+ 277   3          }
+ 278   2          else if(change_flag == 4)
+ 279   2          {
+ 280   3            led7_handle();
+ 281   3          }
+ 282   2          count=0;
+ 283   2        }
+ 284   1      }
+ 285          
+ 286          /*********************按键程序**********************/
+ 287          void keypros()
+ 288          { 
+ 289   1        // 红灯时间 = 绿灯时间 + 黄灯时间；
+ 290   1        // 一次循环时间 = 绿灯时间 + 黄灯时间 + 红灯时间；
+ 291   1        if(key_dec==0)      //检测按键-
+ 292   1        { 
+ 293   2          Delay(1000);   //消除抖动 一般大约10ms
+ 294   2          if(key_dec==0)   //再次判断按键是否按下
+ 295   2          {
+ 296   3            if(change_flag == 1)
+ 297   3            {
+ 298   4              if(Time_EW > 5)
+ 299   4              {
+ 300   5                Time_EW--;
+ 301   5                ew_green_time = Time_EW;
+ 302   5                ns_red_time = ew_green_time + 3;
+C51 COMPILER V9.00   MAIN                                                                  02/17/2022 00:42:19 PAGE 6   
+
+ 303   5                ew_red_time = ns_green_time + 3;
+ 304   5              }
+ 305   4            }
+ 306   3            else if(change_flag == 2)
+ 307   3            {
+ 308   4              if(Time_SN > 5)
+ 309   4              {
+ 310   5                Time_SN--;
+ 311   5                ns_green_time = Time_SN;
+ 312   5                ns_red_time = ew_green_time + 3;
+ 313   5                ew_red_time = ns_green_time + 3;
+ 314   5              }
+ 315   4            }
+ 316   3          }
+ 317   2          while(!key_dec);   //检测按键是否松开
+ 318   2        }
+ 319   1      
+ 320   1        if(key_inc==0)      //检测按键+
+ 321   1        { 
+ 322   2          Delay(1000);   //消除抖动 一般大约10ms
+ 323   2          if(key_inc==0)   //再次判断按键是否按下
+ 324   2          {
+ 325   3            if(change_flag == 1)
+ 326   3            {
+ 327   4              if(Time_EW < 55)
+ 328   4              {
+ 329   5                Time_EW++;
+ 330   5                ew_green_time = Time_EW;
+ 331   5                ns_red_time = ew_green_time + 3;
+ 332   5                ew_red_time = ns_green_time + 3;
+ 333   5              }
+ 334   4            }
+ 335   3            else if(change_flag == 2)
+ 336   3            {
+ 337   4              if(Time_SN < 55)
+ 338   4              {
+ 339   5                Time_SN++;
+ 340   5                ns_green_time = Time_SN;
+ 341   5                ns_red_time = ew_green_time + 3;
+ 342   5                ew_red_time = ns_green_time + 3;
+ 343   5              }
+ 344   4            }
+ 345   3          }
+ 346   2          while(!key_inc);   //检测按键是否松开
+ 347   2        }
+ 348   1      }
+ 349          
+ 350          /*********************外部中断初始化**********************/
+ 351          void Int0Init()
+ 352          {
+ 353   1        //设置 INT0
+ 354   1        IT0=1;//跳变沿出发方式（下降沿）
+ 355   1        EX0=1;//打开 INT0 的中断允许。
+ 356   1        EA=1;//打开总中断
+ 357   1      }
+ 358          
+ 359          /*********************主程序开始**********************/
+ 360          void  main(void)
+ 361          { 
+ 362   1        TMOD=0x01;//定时器工作于方式1
+ 363   1        TH0=(65536-50000)/256;//定时器赋初值
+ 364   1        TL0=(65536-50000)%256;
+C51 COMPILER V9.00   MAIN                                                                  02/17/2022 00:42:19 PAGE 7   
+
+ 365   1        EA=1; //CPU开中断总允许
+ 366   1        ET0=1;//开定时中断
+ 367   1        TR0=1;//启动定时
+ 368   1        
+ 369   1        Int0Init();
+ 370   1      
+ 371   1        ns_red_time = ew_green_time + 3;
+ 372   1        ew_red_time = ns_green_time + 3;
+ 373   1      
+ 374   1        while(1)
+ 375   1        {
+ 376   2          smg_display();
+ 377   2          keypros();
+ 378   2          Delay(20);
+ 379   2        }
+ 380   1      }
+ 381          
+ 382          /*********************外部中断**********************/
+ 383          void Int0() interrupt 0 //外部中断 0 的中断函数
+ 384          {
+ 385   1        Delay(1000); //延时消抖
+ 386   1        if(key_set==0)
+ 387   1        {
+ 388   2          change_flag++;
+ 389   2          if(change_flag > 4)
+ 390   2            change_flag = 0;
+ 391   2          time_cnt = 0;
+ 392   2        }
+ 393   1      }
+ 394          
+ 395          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    773    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     28    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      1    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
